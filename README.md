@@ -1,5 +1,5 @@
-TheBlueAlliance-PebbleApp
-=========================
+The Blue Alliance For Pebble
+============================
 
 An app for pebble smart watches to view FRC team and event information.
 
