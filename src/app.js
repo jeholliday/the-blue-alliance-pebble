@@ -82,19 +82,103 @@ function getTeamCard(num){
   }
   var data = getData('/api/v2/team/frc'+num);
   if(data!=null){ //Okay
-    var title = data.nickname;
-    var body = '';
-    if(!title){
-      title = 'Team ' + data.team_number;
-    }else{
-      body = '#' + data.team_number + '\n' + data.location + '\nRookie Year: ' + data.rookie_year;
+    var headings = {};
+    
+    headings['About'] = function(){
+      var title = data.nickname;
+      var body = '';
+      if(!title){
+        title = 'Team ' + data.team_number;
+      }else{
+        body = '#' + data.team_number + '\n' + data.location + '\nRookie Year: ' + data.rookie_year;
+      }
+      var team = new UI.Card({
+        title: title,
+        body: body,
+        scrollable: true
+      });
+      team.show();
+    };
+    
+    var years = getData('/api/v2/team/frc' + num + '/years_participated');
+    if(years.length>0){
+      headings['Events'] = function(){
+        var sections = [];
+        for(var i=years.length-1;i>=0;i--){
+          var year = years[i];
+          var items = [];
+          var eventList = getData('/api/v2/team/frc' + num + '/' + year + '/events');
+          for(var j=0;j<eventList.length;j++){
+            var event = eventList[j];
+            items[items.length] = {
+              title: event.name,
+              code: event.key
+            };
+          }
+          sections[sections.length] = {
+            title: year,
+            items: items
+          };
+        }
+        var events = new UI.Menu({
+          sections: sections
+        });
+        events.on('select', function(e){
+          var card = getEventCard(e.item.code);
+          card.show();
+        });
+        events.show();
+      };
+    
+      headings['Awards'] = function(){
+        var sections = [];
+        for(var i=years.length-1;i>=0;i--){
+          var year = years[i];
+          var items = [];
+          var eventList = getData('/api/v2/team/frc' + num + '/' + year + '/events');
+          for(var j=0;j<eventList.length;j++){
+            var awardList = getData('/api/v2/team/frc' + num + '/event/' + eventList[j].key + '/awards');
+            for(var h=0;h<awardList.length;h++){
+              items[items.length] = {
+                title: awardList[h].name,
+                subtitle: eventList[j].name,
+                code: awardList[h].event_key
+              };
+            }
+          }
+          sections[sections.length] = {
+            title: year,
+            items: items
+          };
+        }
+        var awards = new UI.Menu({
+          sections: sections
+        });
+        awards.on('select', function(e){
+          var card = getEventCard(e.item.code);
+          card.show();
+        });
+        awards.show();
+      };
     }
-    var team = new UI.Card({
-      title: title,
-      body: body,
-      scrollable: true
+    
+    var items = [];
+    for (var k in headings) {
+      items[items.length] = {
+        title: k,
+        func: headings[k] 
+      };
+    }
+    var menu = new UI.Menu({
+      sections: [{
+        title: data.nickname,
+        items: items
+      }]
     });
-    return team;
+    menu.on('select', function(e) {
+      e.item.func();
+    });
+    return menu;
   }else{
     return new UI.Card({
       title: 'Invalid Team'
@@ -104,34 +188,48 @@ function getTeamCard(num){
 
 function getEventCard(code){
   var event = getData('/api/v2/event/'+code);
-  var menu = new UI.Menu({
-    sections: [{
-      title: event.name,
-      items: [{
-        title: 'About'
-      }, {
-        title: 'Rankings'
-      }, {
-        title: 'Awards'
-      }]
-    }]
-  });
-  menu.on('select', function(e) {
-    var selected = e.item.title;
-    if(selected=='About'){
-      var card = new UI.Card({
+  var headings = {};
+  
+  headings['About'] = function() {
+    var card = new UI.Card({
         title: event.name,
         body: event.location + '\n' + event.start_date + ' to ' + event.end_date,
         scrollable: true
       });
       card.show();
-    }
-    if(selected=='Rankings'){
-      var ranks = getData('/api/v2/event/' + code + '/rankings');
+  };
+  
+  var teams = getData('/api/v2/event/' + code + '/teams');
+  if(teams.length>0){
+    headings['Teams'] = function(){
+      var items = [];
+      for(var i=0;i<teams.length;i++){
+        items[items.length] = {
+          title: teams[i].team_number
+        };
+      }
+      var teamsMenu = new UI.Menu({
+        sections: [{
+          title: 'Teams',
+          items: items
+        }]
+      });
+      teamsMenu.on('select', function(e){
+        var card = getTeamCard(e.item.title);
+        card.show();
+      });
+      teamsMenu.show();
+    };
+  }
+  
+  var ranks = getData('/api/v2/event/' + code + '/rankings');
+  if(ranks.length>0){
+    headings['Rankings'] = function() {
       var items = [];
       for(var i=1;i<ranks.length;i++){
         items[i-1] = {
           title: ranks[i][0] + ': ' + ranks[i][1],
+          subtitle: '',
           num: ranks[i][1]
         };
       }
@@ -146,9 +244,12 @@ function getEventCard(code){
         team.show();
       });
       rankings.show();
-    }
-    if(selected=='Awards'){
-      var awards = getData('/api/v2/event/' + code + '/awards');
+    };
+  }
+  
+  var awards = getData('/api/v2/event/' + code + '/awards');
+  if(awards.length>0){
+    headings['Awards'] = function(){
       var items1 = []; // Okay
       for(var j=0;j<awards.length;j++){ // Okay
         var award = awards[j];
@@ -196,7 +297,24 @@ function getEventCard(code){
         winnersMenu.show();
       });
       awardsMenu.show();
-    }
+    };
+  }
+  
+  var items = [];
+  for (var k in headings) {
+    items[items.length] = {
+      title: k,
+      func: headings[k] 
+    };
+  }
+  var menu = new UI.Menu({
+    sections: [{
+      title: event.name,
+      items: items
+    }]
+  });
+  menu.on('select', function(e) {
+    e.item.func();
   });
   return menu;
 }
